@@ -1,0 +1,1198 @@
+import React, { useState, useMemo } from 'react';
+import { 
+  Car, 
+  Search,
+  Plus, 
+  Trash2, 
+  Save,
+  Bell,
+  Headphones,
+  User,
+  ChevronDown,
+  ChevronRight,
+  Upload,
+  X,
+  FileText,
+  Settings,
+  Menu,
+  MoreVertical,
+  UploadCloud,
+  Briefcase,
+  Percent,
+  Eye,
+  Edit
+} from 'lucide-react';
+
+const App = () => {
+  // --- 1. 基础状态管理 ---
+  const [activeTab, setActiveTab] = useState('rights'); 
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isViewOnly, setIsViewOnly] = useState(false);
+  const [expandedMenus, setExpandedMenus] = useState(['system', 'services']);
+
+  // 服务包搜索筛选状态
+  const [searchFilters, setSearchFilters] = useState({
+    name: '',
+    code: '',
+    energy: '全部',
+    status: '全部'
+  });
+
+  const [rightsSearchQuery, setRightsSearchQuery] = useState('');
+
+  // 模拟字典数据
+  const cityOptions = ['全国', '北京市', '上海市', '广州市', '深圳市', '杭州市', '成都市', '重庆市', '武汉市', '西安市'];
+  const modelOptions = ['全系通用', '一汽大众CC', '迈腾', '辉腾', '高尔夫', 'ID.7 VIZZION', 'Model 3', 'Model Y'];
+  const supplierOptions = ['特斯拉', '一汽大众', '比亚迪', '人保', '平安车险', '途虎养车', '第三方平台'];
+
+  // 1.1 基础权益库 (转为 State 以支持增删改查，补充了 Excel 中定义的新字段)
+  const [rightsLibrary, setRightsLibrary] = useState([
+    { id: 'R001', code: 'INS-TSL-001', externalCode: 'SUP-TS-991', name: '理赔出行补偿 (特斯拉)', supplier: '特斯拉', type: '保险类', isDynamic: false, amount: 100, frequency: 1, verification: '报案核销', validityType: '随包生效', status: 'active', desc: '特斯拉车主专属理赔期间代步车或出行费用补偿。单次出险最高补偿额度为1000元。' },
+    { id: 'R002', code: 'SVC-TSL-002', externalCode: 'SUP-TS-992', name: '次年续保折扣 (特斯拉)', supplier: '特斯拉', type: '服务类', isDynamic: false, amount: 200, frequency: 1, verification: 'APP核销', validityType: '固定日历日期', status: 'active', desc: '无出险用户次年续保商业险可享受专属折扣。需通过官方指定渠道续保。' },
+    { id: 'R003', code: 'SVC-VW-FX-1Y', externalCode: 'SUP-FAW-001', name: '放心修-一年期 (一汽大众)', supplier: '一汽大众', type: '服务类', isDynamic: true, amount: 0, frequency: 2, verification: '车牌核销', validityType: '激活后固定天数', status: 'active', desc: '一汽大众原厂核心部件一年期延保服务。仅限非营运车辆，需全程在4S店保养。' },
+    { id: 'R004', code: 'SVC-BYD-BY-01', externalCode: 'SUP-BYD-M01', name: '基础保养套餐 (比亚迪)', supplier: '比亚迪', type: '服务类', isDynamic: false, amount: 150, frequency: 1, verification: '扫码核销', validityType: '随包生效', status: 'inactive', desc: '含机油及机滤更换。有效期内全国通用。' },
+    { id: 'R005', code: 'SVC-WASH-12', externalCode: 'API-TUHU-W12', name: '全年12次精洗服务', supplier: '第三方平台', type: '服务类', isDynamic: false, amount: 360, frequency: 12, verification: '扫码核销', validityType: '随包生效', status: 'draft', desc: '含打蜡及内饰深度清洁。每月限使用一次。' }
+  ]);
+
+  // 1.2 服务包数据
+  const [packages, setPackages] = useState([
+    { 
+      id: 'P001', 
+      name: '特斯拉专属尊享包', 
+      code: 'SP-TSL-2024-01',
+      packageExtCode: 'API-TSL-PKG-01',
+      desc: '专为特斯拉车主定制的综合服务权益，要求非营运车辆。',
+      status: 'online', // online(已上架), offline(已下架), draft(草稿)
+      energyType: '新能源',
+      targetAge: { operator: 'lessThan', max: 30, maxInclusive: true, maxUnit: '天' },
+      maxMileageAtPurchase: 5000,
+      vehicleNature: '非营运',
+      ownership: '首任车主',
+      regions: ['上海市', '杭州市'],
+      allowedModels: ['Model 3', 'Model Y'],
+      validity: { time: 1, timeUnit: '年', mileage: '' },
+      includedRights: ['R001', 'R002'], 
+      costMatrix: [
+        { id: 'm1', region: '华东区域', vehicleLevel: 'Model 3/Y', packageCost: 200, baseCost: 300, suggestedPrice: 599 },
+        { id: 'm2', region: '华南区域', vehicleLevel: 'Model 3/Y', packageCost: 190, baseCost: 280, suggestedPrice: 550 }
+      ]
+    },
+    { 
+      id: 'P002', 
+      name: '一汽大众放心修专项包', 
+      code: 'SP-VW-FX-001',
+      packageExtCode: 'API-FAW-EXT-02',
+      desc: '针对一汽大众中高端车型的专项维修保障，适用于大部分家用车。',
+      status: 'draft',
+      energyType: '燃油车',
+      targetAge: { operator: 'between', min: 30, minInclusive: false, minUnit: '天', max: 8, maxInclusive: true, maxUnit: '年' },
+      maxMileageAtPurchase: 100000, 
+      vehicleNature: '不限',
+      ownership: '不限',
+      regions: ['全国'],
+      allowedModels: ['一汽大众CC', '迈腾', '辉腾'],
+      validity: { time: 3, timeUnit: '年', mileage: 6 },
+      includedRights: ['R003'], 
+      costMatrix: [
+        { id: 'm3', region: '全国', vehicleLevel: '迈腾/帕萨特', packageCost: 350, baseCost: 450, suggestedPrice: 899 }
+      ]
+    }
+  ]);
+
+  // 1.3 分润规则数据
+  const [profitRules, setProfitRules] = useState([
+    { id: 'PR001', name: '2024华东区特斯拉延保分润', packageName: '特斯拉专属尊享包', partner: '华东大区直营店', mode: '比例分成 (15%)', cycle: '月结', status: 'active' },
+    { id: 'PR002', name: '大众放心修渠道推广', packageName: '一汽大众放心修专项包', partner: '途虎养车', mode: '固定返佣 (¥50/单)', cycle: '周结', status: 'active' },
+    { id: 'PR003', name: '比亚迪基础保养引流方案', packageName: '基础保养套餐 (比亚迪)', partner: '懂车帝平台', mode: '阶梯分成', cycle: '实时结算', status: 'inactive' }
+  ]);
+
+  const [editingPackage, setEditingPackage] = useState(null);
+
+  // 权益库相关的状态
+  const [isRightModalOpen, setIsRightModalOpen] = useState(false);
+  const [editingRight, setEditingRight] = useState(null);
+  const [isRightViewOnly, setIsRightViewOnly] = useState(false);
+
+  const statusMap = {
+    'online': '已上架',
+    'offline': '已下架',
+    'draft': '草稿'
+  };
+
+  const rightStatusMap = {
+    'active': { text: '已启用', color: 'text-green-600', bg: 'bg-green-50', border: 'border-green-200' },
+    'inactive': { text: '已停用', color: 'text-red-500', bg: 'bg-red-50', border: 'border-red-200' },
+    'draft': { text: '草稿', color: 'text-gray-600', bg: 'bg-gray-100', border: 'border-gray-300' }
+  };
+
+  // --- 2. 逻辑处理 ---
+
+  const handleOpenPackage = (pkg = null) => {
+    setRightsSearchQuery(''); 
+    if (pkg) {
+      setEditingPackage({ ...pkg });
+      setIsViewOnly(pkg.status === 'online');
+    } else {
+      setEditingPackage({
+        id: '', name: '', code: '', packageExtCode: '', desc: '', status: 'draft',
+        energyType: '全部',
+        targetAge: { operator: 'between', min: 0, minInclusive: false, minUnit: '天', max: 8, maxInclusive: true, maxUnit: '年' },
+        maxMileageAtPurchase: '',
+        vehicleNature: '非营运',
+        ownership: '不限',
+        regions: [],
+        allowedModels: [],
+        validity: { time: 1, timeUnit: '年', mileage: '' },
+        includedRights: [],
+        costMatrix: [{ id: Date.now(), region: '全国', vehicleLevel: '通用', packageCost: 0, baseCost: 0, suggestedPrice: 0 }]
+      });
+      setIsViewOnly(false);
+    }
+    setIsModalOpen(true);
+  };
+
+  const savePackage = (targetStatus) => {
+    if (editingPackage.includedRights.length === 0) {
+      alert('配置不完整: 服务包必须至少包含一个基础权益。'); return;
+    }
+    if (!editingPackage.name) {
+      alert('信息缺失: 请输入服务包显示名称。'); return;
+    }
+    const updatedPackage = { ...editingPackage, status: targetStatus };
+    if (updatedPackage.id) {
+      setPackages(prev => prev.map(p => p.id === updatedPackage.id ? updatedPackage : p));
+    } else {
+      setPackages(prev => [...prev, { ...updatedPackage, id: `P${Date.now()}`, code: `SP-NEW-${Math.floor(Math.random()*1000)}` }]);
+    }
+    setIsModalOpen(false);
+  };
+
+  const togglePackageStatus = (id, currentStatus) => {
+    const nextStatus = currentStatus === 'online' ? 'offline' : 'online';
+    setPackages(prev => prev.map(p => p.id === id ? { ...p, status: nextStatus } : p));
+  };
+
+  // --- 权益库逻辑处理 ---
+  const handleOpenRight = (right = null, viewOnly = false) => {
+    if (right) {
+      setEditingRight({ ...right });
+      setIsRightViewOnly(viewOnly);
+    } else {
+      setEditingRight({
+        id: '', code: '', externalCode: '', name: '', supplier: supplierOptions[0], 
+        type: '服务类', isDynamic: false, amount: '', frequency: 1, 
+        verification: '扫码核销', validityType: '随包生效', status: 'draft', desc: ''
+      });
+      setIsRightViewOnly(false);
+    }
+    setIsRightModalOpen(true);
+  };
+
+  const saveRight = (targetStatus) => {
+    if (!editingRight.code) {
+      alert('请输入权益代码'); return;
+    }
+    if (!editingRight.name || editingRight.name.length < 2 || editingRight.name.length > 50) {
+      alert('权益名称必须在2-50个字符之间'); return;
+    }
+    if (!editingRight.supplier) {
+      alert('请选择服务供应商'); return;
+    }
+    if (!editingRight.desc) {
+      alert('请填写服务描述'); return;
+    }
+    if (!editingRight.isDynamic && (editingRight.amount === '' || isNaN(editingRight.amount))) {
+      alert('请输入基准采购成本'); return;
+    }
+
+    const updatedRight = { 
+      ...editingRight, 
+      status: targetStatus, 
+      amount: editingRight.isDynamic ? 0 : (parseFloat(editingRight.amount) || 0) 
+    };
+
+    if (updatedRight.id) {
+      setRightsLibrary(prev => prev.map(r => r.id === updatedRight.id ? updatedRight : r));
+    } else {
+      setRightsLibrary(prev => [...prev, { ...updatedRight, id: `R${Date.now()}` }]);
+    }
+    setIsRightModalOpen(false);
+  };
+
+  const toggleRightStatus = (id, currentStatus) => {
+    const nextStatus = currentStatus === 'active' ? 'inactive' : 'active';
+    setRightsLibrary(prev => prev.map(r => r.id === id ? { ...r, status: nextStatus } : r));
+  };
+
+  const deleteRight = (id) => {
+    if(window.confirm('确定要删除这条权益记录吗？')) {
+      setRightsLibrary(prev => prev.filter(r => r.id !== id));
+    }
+  };
+
+  const resetFilters = () => {
+    setSearchFilters({ name: '', code: '', energy: '全部', status: '全部' });
+  };
+
+  const toggleMenu = (menuId) => {
+    setExpandedMenus(prev => 
+      prev.includes(menuId) ? prev.filter(id => id !== menuId) : [...prev, menuId]
+    );
+  };
+
+  // --- 3. 页面组件 ---
+
+  const SidebarMenu = () => (
+    <div className="flex-1 overflow-y-auto bg-[#001529] text-[14px]">
+      <div>
+        <div className="flex items-center justify-between px-5 py-3 text-[#a6adb4] hover:text-white cursor-pointer transition-colors">
+          <div className="flex items-center gap-3"><User size={16}/> <span>组织人员管理</span></div>
+          <ChevronDown size={14} />
+        </div>
+      </div>
+      <div>
+        <div className="flex items-center justify-between px-5 py-3 text-[#a6adb4] hover:text-white cursor-pointer transition-colors" onClick={() => toggleMenu('system')}>
+          <div className="flex items-center gap-3"><Settings size={16}/> <span>系统设置</span></div>
+          <ChevronDown size={14} className={`transform transition-transform ${expandedMenus.includes('system') ? 'rotate-180' : ''}`} />
+        </div>
+      </div>
+      <div>
+        <div className="flex items-center justify-between px-5 py-3 text-white cursor-pointer transition-colors bg-[#001529]" onClick={() => toggleMenu('services')}>
+          <div className="flex items-center gap-3"><Menu size={16}/> <span>服务包系统</span></div>
+          <ChevronDown size={14} className={`transform transition-transform ${expandedMenus.includes('services') ? 'rotate-180' : ''}`} />
+        </div>
+        {expandedMenus.includes('services') && (
+          <div className="bg-[#000c17] py-1">
+            <div 
+              className={`px-12 py-2.5 cursor-pointer transition-colors ${activeTab === 'rights' ? 'bg-[#1890ff] text-white' : 'text-[#a6adb4] hover:text-white'}`}
+              onClick={() => setActiveTab('rights')}
+            >
+              基础权益库管理
+            </div>
+            <div 
+              className={`px-12 py-2.5 cursor-pointer transition-colors ${activeTab === 'packages' ? 'bg-[#1890ff] text-white' : 'text-[#a6adb4] hover:text-white'}`}
+              onClick={() => setActiveTab('packages')}
+            >
+              服务包定义管理
+            </div>
+            <div 
+              className={`px-12 py-2.5 cursor-pointer transition-colors ${activeTab === 'profit' ? 'bg-[#1890ff] text-white' : 'text-[#a6adb4] hover:text-white'}`}
+              onClick={() => setActiveTab('profit')}
+            >
+              分润项目管理
+            </div>
+            <div 
+              className={`px-12 py-2.5 cursor-pointer transition-colors ${activeTab === 'orders' ? 'bg-[#1890ff] text-white' : 'text-[#a6adb4] hover:text-white'}`}
+              onClick={() => setActiveTab('orders')}
+            >
+              服务包订单管理
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
+  const TopHeader = () => (
+    <header className="h-[48px] bg-white border-b border-[#f0f0f0] flex justify-between items-center px-6 flex-shrink-0 z-10">
+      <div className="flex items-center gap-4 text-[14px] text-gray-500">
+        <Menu size={18} className="cursor-pointer hover:text-[#1890ff]" />
+        <div className="bg-[#f5f5f5] px-3 py-1 rounded-full text-xs flex items-center gap-2 border border-[#d9d9d9]">
+          <span className="text-[#1890ff]">系统通知:</span> 未读4
+          <X size={12} className="cursor-pointer ml-2 hover:text-gray-700" />
+        </div>
+      </div>
+      <div className="flex items-center gap-6 text-[14px] text-gray-600">
+        <span>一汽-大众汽车有限公司</span>
+        <Bell size={16} className="cursor-pointer hover:text-[#1890ff]" />
+        <Headphones size={16} className="cursor-pointer hover:text-[#1890ff]" />
+        <div className="flex items-center gap-2 cursor-pointer">
+          <div className="w-6 h-6 rounded-full bg-[#1890ff] text-white flex items-center justify-center">
+            <User size={14} />
+          </div>
+          <span className="text-[14px]">系统运营</span>
+        </div>
+      </div>
+    </header>
+  );
+
+  // --- 4. 核心页面区域 ---
+
+  // --- 4.1 基础权益库管理界面 ---
+  const RightsManager = () => {
+    const [rightsSearch, setRightsSearch] = useState({ name: '', supplier: '', code: '', type: '全部', status: '全部' });
+
+    const filteredRights = useMemo(() => {
+      return rightsLibrary.filter(r => 
+        r.name.includes(rightsSearch.name) &&
+        r.supplier.includes(rightsSearch.supplier) &&
+        (r.code.includes(rightsSearch.code) || (r.externalCode && r.externalCode.includes(rightsSearch.code))) &&
+        (rightsSearch.type === '全部' || r.type === rightsSearch.type) &&
+        (rightsSearch.status === '全部' || 
+          (rightsSearch.status === '已启用' && r.status === 'active') ||
+          (rightsSearch.status === '已停用' && r.status === 'inactive') ||
+          (rightsSearch.status === '草稿' && r.status === 'draft')
+        )
+      );
+    }, [rightsSearch, rightsLibrary]);
+
+    return (
+      <div className="flex flex-col flex-1 h-full overflow-hidden bg-[#f0f2f5]">
+        <div className="bg-white px-6 py-4 border-b border-[#f0f0f0] flex-shrink-0">
+          <div className="text-[14px] text-gray-400 mb-2 flex items-center gap-2">
+            <span>服务包系统</span> <span className="text-gray-300">/</span> <span className="text-gray-600">基础权益库管理</span>
+          </div>
+          <h1 className="text-[20px] font-medium text-gray-800">基础权益库查询</h1>
+        </div>
+
+        <div className="p-6 overflow-y-auto flex-1 custom-scrollbar">
+          {/* 搜索表单区域 */}
+          <div className="bg-white p-6 mb-4 rounded-sm border border-[#f0f0f0]">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-x-8 gap-y-6">
+               <div className="flex flex-col">
+                  <label className="text-[14px] text-gray-700 mb-2">权益名称</label>
+                  <input 
+                    className="h-8 px-3 text-[14px] border border-[#d9d9d9] rounded-sm focus:border-[#1890ff] focus:ring-2 focus:ring-[#1890ff]/20 outline-none transition-all placeholder-gray-300" 
+                    placeholder="请输入权益名称" 
+                    value={rightsSearch.name}
+                    onChange={e => setRightsSearch({...rightsSearch, name: e.target.value})}
+                  />
+               </div>
+               <div className="flex flex-col">
+                  <label className="text-[14px] text-gray-700 mb-2">系统代码/映射码</label>
+                  <input 
+                    className="h-8 px-3 text-[14px] border border-[#d9d9d9] rounded-sm focus:border-[#1890ff] focus:ring-2 focus:ring-[#1890ff]/20 outline-none transition-all placeholder-gray-300" 
+                    placeholder="请输入代码" 
+                    value={rightsSearch.code}
+                    onChange={e => setRightsSearch({...rightsSearch, code: e.target.value})}
+                  />
+               </div>
+               <div className="flex flex-col">
+                  <label className="text-[14px] text-gray-700 mb-2">供应商</label>
+                  <input 
+                    className="h-8 px-3 text-[14px] border border-[#d9d9d9] rounded-sm focus:border-[#1890ff] focus:ring-2 focus:ring-[#1890ff]/20 outline-none transition-all placeholder-gray-300" 
+                    placeholder="请输入供应商" 
+                    value={rightsSearch.supplier}
+                    onChange={e => setRightsSearch({...rightsSearch, supplier: e.target.value})}
+                  />
+               </div>
+               <div className="flex flex-col">
+                  <label className="text-[14px] text-gray-700 mb-2">状态</label>
+                  <div className="relative">
+                    <select 
+                      className="w-full h-8 px-3 text-[14px] border border-[#d9d9d9] rounded-sm focus:border-[#1890ff] focus:ring-2 focus:ring-[#1890ff]/20 outline-none transition-all appearance-none bg-white cursor-pointer"
+                      value={rightsSearch.status}
+                      onChange={e => setRightsSearch({...rightsSearch, status: e.target.value})}
+                    >
+                      <option>全部</option><option>已启用</option><option>已停用</option><option>草稿</option>
+                    </select>
+                    <ChevronDown size={14} className="absolute right-3 top-2 text-gray-400 pointer-events-none" />
+                  </div>
+               </div>
+            </div>
+            <div className="flex justify-end mt-6 gap-2">
+               <button onClick={() => setRightsSearch({ name: '', supplier: '', code: '', type: '全部', status: '全部' })} className="h-8 px-4 text-[14px] bg-white border border-[#d9d9d9] text-gray-700 rounded-sm hover:text-[#1890ff] hover:border-[#1890ff] transition-all">重置</button>
+               <button className="h-8 px-4 text-[14px] bg-[#1890ff] border border-[#1890ff] text-white rounded-sm hover:bg-[#40a9ff] hover:border-[#40a9ff] transition-all">查询</button>
+            </div>
+          </div>
+
+          {/* 表格区域 */}
+          <div className="bg-white rounded-sm border border-[#f0f0f0]">
+            <div className="px-6 py-4 flex gap-2 border-b border-[#f0f0f0]">
+               <button onClick={() => handleOpenRight()} className="h-8 px-4 text-[14px] bg-[#1890ff] border border-[#1890ff] text-white rounded-sm hover:bg-[#40a9ff] hover:border-[#40a9ff] transition-all flex items-center gap-2">
+                 <Plus size={14} /> 新增权益项
+               </button>
+            </div>
+            
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse text-[14px]">
+                <thead>
+                  <tr className="bg-[#fafafa] border-b border-[#f0f0f0] text-gray-800 font-medium">
+                    <th className="px-6 py-3 w-12"><input type="checkbox" className="rounded-sm border-[#d9d9d9] cursor-pointer" /></th>
+                    <th className="px-4 py-3">权益名称</th>
+                    <th className="px-4 py-3">内部代码 / 外部映射码</th>
+                    <th className="px-4 py-3">供应商</th>
+                    <th className="px-4 py-3">权益类型</th>
+                    <th className="px-4 py-3 text-right">基准成本</th>
+                    <th className="px-4 py-3">状态</th>
+                    <th className="px-6 py-3 text-right">操作</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#f0f0f0]">
+                  {filteredRights.map(right => (
+                      <tr key={right.id} className="hover:bg-[#fafafa] transition-colors text-gray-600">
+                        <td className="px-6 py-4"><input type="checkbox" className="rounded-sm border-[#d9d9d9] cursor-pointer" /></td>
+                        <td className="px-4 py-4">
+                          <div className="font-medium text-gray-800">{right.name}</div>
+                        </td>
+                        <td className="px-4 py-4">
+                          <div>{right.code}</div>
+                          {right.externalCode && <div className="text-gray-400 text-xs mt-0.5">{right.externalCode}</div>}
+                        </td>
+                        <td className="px-4 py-4">{right.supplier}</td>
+                        <td className="px-4 py-4">{right.type}</td>
+                        <td className="px-4 py-4 text-right">{right.isDynamic ? <span className="text-gray-400 italic">动态定价</span> : `¥${right.amount}`}</td>
+                        <td className="px-4 py-4">
+                          <span className={`inline-block px-2 py-0.5 rounded text-xs border ${rightStatusMap[right.status].bg} ${rightStatusMap[right.status].border} ${rightStatusMap[right.status].color}`}>
+                            {rightStatusMap[right.status].text}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 text-right">
+                           <button onClick={() => handleOpenRight(right, true)} className="text-[#1890ff] hover:text-[#40a9ff] text-[14px] cursor-pointer mr-3">查看</button>
+                           {right.status !== 'active' && (
+                             <button onClick={() => handleOpenRight(right, false)} className="text-[#1890ff] hover:text-[#40a9ff] text-[14px] cursor-pointer mr-3">编辑</button>
+                           )}
+                           {right.status === 'active' ? (
+                             <button onClick={() => toggleRightStatus(right.id, right.status)} className="text-[#1890ff] hover:text-[#40a9ff] text-[14px] cursor-pointer">停用</button>
+                           ) : (
+                             <button onClick={() => toggleRightStatus(right.id, right.status)} className="text-green-600 hover:text-green-500 text-[14px] cursor-pointer mr-3">启用</button>
+                           )}
+                           {right.status !== 'active' && (
+                             <button onClick={() => deleteRight(right.id)} className="text-red-500 hover:text-red-400 text-[14px] cursor-pointer ml-3">删除</button>
+                           )}
+                        </td>
+                      </tr>
+                    ))}
+                    {filteredRights.length === 0 && <tr><td colSpan="8" className="text-center py-10 text-gray-400">暂无数据</td></tr>}
+                </tbody>
+              </table>
+            </div>
+            
+            <div className="px-6 py-4 flex justify-end items-center border-t border-[#f0f0f0]">
+              <div className="flex items-center gap-2 text-[14px] text-gray-600">
+                <span>共 {filteredRights.length} 条</span>
+                <button className="h-8 min-w-[32px] px-2 rounded-sm border border-[#d9d9d9] flex items-center justify-center text-gray-400 bg-[#f5f5f5] cursor-not-allowed"><ChevronRight size={14} className="rotate-180" /></button>
+                <button className="h-8 min-w-[32px] px-2 rounded-sm border border-[#1890ff] flex items-center justify-center text-[#1890ff] bg-white cursor-pointer font-medium">1</button>
+                <button className="h-8 min-w-[32px] px-2 rounded-sm border border-[#d9d9d9] flex items-center justify-center text-gray-400 bg-[#f5f5f5] cursor-not-allowed"><ChevronRight size={14} /></button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // --- 4.2 服务包系统 (已折叠保留) ---
+  const ServicePackageBuilder = () => {
+    // ... ServicePackageBuilder logic remains unchanged ...
+    const filteredData = useMemo(() => {
+      return packages.filter(pkg => 
+        pkg.name.includes(searchFilters.name) && 
+        pkg.code.includes(searchFilters.code) &&
+        (searchFilters.energy === '全部' || pkg.energyType === searchFilters.energy) &&
+        (searchFilters.status === '全部' || 
+          (searchFilters.status === '已上架' && pkg.status === 'online') ||
+          (searchFilters.status === '已下架' && pkg.status === 'offline') ||
+          (searchFilters.status === '草稿' && pkg.status === 'draft')
+        )
+      );
+    }, [searchFilters, packages]);
+
+    return (
+      <div className="flex flex-col flex-1 h-full overflow-hidden bg-[#f0f2f5]">
+        <div className="bg-white px-6 py-4 border-b border-[#f0f0f0] flex-shrink-0">
+          <div className="text-[14px] text-gray-400 mb-2 flex items-center gap-2">
+            <span>服务包系统</span> <span className="text-gray-300">/</span> <span className="text-gray-600">服务包定义管理</span>
+          </div>
+          <h1 className="text-[20px] font-medium text-gray-800">服务包定义查询</h1>
+        </div>
+        <div className="p-6 overflow-y-auto flex-1 custom-scrollbar">
+          {/* ... Search ... */}
+          <div className="bg-white p-6 mb-4 rounded-sm border border-[#f0f0f0]">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-x-8 gap-y-6">
+               <div className="flex flex-col">
+                  <label className="text-[14px] text-gray-700 mb-2">服务包名称</label>
+                  <input className="h-8 px-3 text-[14px] border border-[#d9d9d9] rounded-sm focus:border-[#1890ff] outline-none transition-all placeholder-gray-300" placeholder="请输入服务包名称" value={searchFilters.name} onChange={e => setSearchFilters({...searchFilters, name: e.target.value})} />
+               </div>
+               <div className="flex flex-col">
+                  <label className="text-[14px] text-gray-700 mb-2">服务包代码</label>
+                  <input className="h-8 px-3 text-[14px] border border-[#d9d9d9] rounded-sm focus:border-[#1890ff] outline-none transition-all placeholder-gray-300" placeholder="请输入代码" value={searchFilters.code} onChange={e => setSearchFilters({...searchFilters, code: e.target.value})} />
+               </div>
+               <div className="flex flex-col">
+                  <label className="text-[14px] text-gray-700 mb-2">能源类型</label>
+                  <div className="relative">
+                    <select className="w-full h-8 px-3 text-[14px] border border-[#d9d9d9] rounded-sm focus:border-[#1890ff] outline-none transition-all appearance-none bg-white cursor-pointer" value={searchFilters.energy} onChange={e => setSearchFilters({...searchFilters, energy: e.target.value})}>
+                      <option>全部</option><option>燃油车</option><option>新能源</option>
+                    </select>
+                    <ChevronDown size={14} className="absolute right-3 top-2 text-gray-400 pointer-events-none" />
+                  </div>
+               </div>
+               <div className="flex flex-col">
+                  <label className="text-[14px] text-gray-700 mb-2">发布状态</label>
+                  <div className="relative">
+                    <select className="w-full h-8 px-3 text-[14px] border border-[#d9d9d9] rounded-sm focus:border-[#1890ff] outline-none transition-all appearance-none bg-white cursor-pointer" value={searchFilters.status} onChange={e => setSearchFilters({...searchFilters, status: e.target.value})}>
+                      <option>全部</option><option>已上架</option><option>已下架</option><option>草稿</option>
+                    </select>
+                    <ChevronDown size={14} className="absolute right-3 top-2 text-gray-400 pointer-events-none" />
+                  </div>
+               </div>
+            </div>
+            <div className="flex justify-end mt-6 gap-2">
+               <button onClick={resetFilters} className="h-8 px-4 text-[14px] bg-white border border-[#d9d9d9] text-gray-700 rounded-sm hover:text-[#1890ff] hover:border-[#1890ff] transition-all">重置</button>
+               <button className="h-8 px-4 text-[14px] bg-[#1890ff] border border-[#1890ff] text-white rounded-sm hover:bg-[#40a9ff] transition-all">查询</button>
+            </div>
+          </div>
+          {/* ... Table ... */}
+          <div className="bg-white rounded-sm border border-[#f0f0f0]">
+            <div className="px-6 py-4 flex gap-2 border-b border-[#f0f0f0]">
+               <button className="h-8 px-4 text-[14px] bg-white border border-[#d9d9d9] text-gray-700 rounded-sm hover:text-[#1890ff] hover:border-[#1890ff] transition-all flex items-center gap-2">导出</button>
+               <button onClick={() => handleOpenPackage()} className="h-8 px-4 text-[14px] bg-[#1890ff] border border-[#1890ff] text-white rounded-sm hover:bg-[#40a9ff] transition-all flex items-center gap-2"><Plus size={14} /> 新建服务包</button>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse text-[14px]">
+                <thead>
+                  <tr className="bg-[#fafafa] border-b border-[#f0f0f0] text-gray-800 font-medium">
+                    <th className="px-6 py-3 w-12"><input type="checkbox" className="rounded-sm border-[#d9d9d9] cursor-pointer" /></th>
+                    <th className="px-4 py-3">服务包名称</th>
+                    <th className="px-4 py-3">服务包代码</th>
+                    <th className="px-4 py-3">外部系统映射码</th>
+                    <th className="px-4 py-3">能源类型</th>
+                    <th className="px-4 py-3">状态</th>
+                    <th className="px-4 py-3">包含权益数</th>
+                    <th className="px-6 py-3 text-right">操作</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#f0f0f0]">
+                  {filteredData.map(pkg => (
+                      <tr key={pkg.id} className="hover:bg-[#fafafa] transition-colors text-gray-600">
+                        <td className="px-6 py-4"><input type="checkbox" className="rounded-sm border-[#d9d9d9] cursor-pointer" /></td>
+                        <td className="px-4 py-4">{pkg.name}</td>
+                        <td className="px-4 py-4">{pkg.code}</td>
+                        <td className="px-4 py-4">{pkg.packageExtCode || '-'}</td>
+                        <td className="px-4 py-4">{pkg.energyType}</td>
+                        <td className="px-4 py-4"><span className={`inline-block px-2 py-0.5 rounded text-xs ${pkg.status === 'online' ? 'bg-green-50 border border-green-200 text-green-600' : pkg.status === 'offline' ? 'bg-red-50 border border-red-200 text-red-500' : 'bg-gray-100 border border-gray-300 text-gray-600'}`}>{statusMap[pkg.status]}</span></td>
+                        <td className="px-4 py-4">{pkg.includedRights.length} 项</td>
+                        <td className="px-6 py-4 text-right">
+                           <button onClick={() => togglePackageStatus(pkg.id, pkg.status)} className="text-[#1890ff] hover:text-[#40a9ff] text-[14px] cursor-pointer mr-3">{pkg.status === 'online' ? '下架' : '上架'}</button>
+                           <button onClick={() => handleOpenPackage(pkg)} className="text-[#1890ff] hover:text-[#40a9ff] text-[14px] cursor-pointer mr-3">查看</button>
+                           <button onClick={() => handleOpenPackage(pkg)} className="text-[#1890ff] hover:text-[#40a9ff] text-[14px] cursor-pointer">批改</button>
+                        </td>
+                      </tr>
+                    ))}
+                    {filteredData.length === 0 && <tr><td colSpan="8" className="py-10 text-center text-gray-400">暂无数据</td></tr>}
+                </tbody>
+              </table>
+            </div>
+            <div className="px-6 py-4 flex justify-end items-center border-t border-[#f0f0f0]">
+              <div className="flex items-center gap-2 text-[14px] text-gray-600">
+                <span>共 {filteredData.length} 条</span>
+                <button className="h-8 min-w-[32px] px-2 rounded-sm border border-[#d9d9d9] flex items-center justify-center text-gray-400 bg-[#f5f5f5] cursor-not-allowed"><ChevronRight size={14} className="rotate-180" /></button>
+                <button className="h-8 min-w-[32px] px-2 rounded-sm border border-[#1890ff] flex items-center justify-center text-[#1890ff] bg-white cursor-pointer font-medium">1</button>
+                <button className="h-8 min-w-[32px] px-2 rounded-sm border border-[#d9d9d9] flex items-center justify-center text-gray-400 bg-[#f5f5f5] cursor-not-allowed"><ChevronRight size={14} /></button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // --- 4.3 分润项目管理界面 (已折叠保留) ---
+  const ProfitManager = () => {
+    const [profitSearch, setProfitSearch] = useState({ name: '', partner: '', status: '全部' });
+    const filteredProfits = useMemo(() => {
+      return profitRules.filter(p => 
+        p.name.includes(profitSearch.name) &&
+        p.partner.includes(profitSearch.partner) &&
+        (profitSearch.status === '全部' || (profitSearch.status === '生效中' ? p.status === 'active' : p.status === 'inactive'))
+      );
+    }, [profitSearch, profitRules]);
+    return (
+      <div className="flex flex-col flex-1 h-full overflow-hidden bg-[#f0f2f5]">
+        <div className="bg-white px-6 py-4 border-b border-[#f0f0f0] flex-shrink-0">
+          <div className="text-[14px] text-gray-400 mb-2 flex items-center gap-2">
+            <span>服务包系统</span> <span className="text-gray-300">/</span> <span className="text-gray-600">分润项目管理</span>
+          </div>
+          <h1 className="text-[20px] font-medium text-gray-800">分润规则查询</h1>
+        </div>
+        <div className="p-6 overflow-y-auto flex-1 custom-scrollbar">
+          {/* ... Search ... */}
+          <div className="bg-white p-6 mb-4 rounded-sm border border-[#f0f0f0]">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-x-8 gap-y-6">
+               <div className="flex flex-col">
+                  <label className="text-[14px] text-gray-700 mb-2">规则名称</label>
+                  <input className="h-8 px-3 text-[14px] border border-[#d9d9d9] rounded-sm focus:border-[#1890ff] outline-none transition-all placeholder-gray-300" value={profitSearch.name} onChange={e => setProfitSearch({...profitSearch, name: e.target.value})} />
+               </div>
+               <div className="flex flex-col">
+                  <label className="text-[14px] text-gray-700 mb-2">合作渠道 / 门店</label>
+                  <input className="h-8 px-3 text-[14px] border border-[#d9d9d9] rounded-sm focus:border-[#1890ff] outline-none transition-all placeholder-gray-300" value={profitSearch.partner} onChange={e => setProfitSearch({...profitSearch, partner: e.target.value})} />
+               </div>
+               <div className="flex flex-col">
+                  <label className="text-[14px] text-gray-700 mb-2">状态</label>
+                  <div className="relative">
+                    <select className="w-full h-8 px-3 text-[14px] border border-[#d9d9d9] rounded-sm focus:border-[#1890ff] outline-none transition-all appearance-none bg-white cursor-pointer" value={profitSearch.status} onChange={e => setProfitSearch({...profitSearch, status: e.target.value})}>
+                      <option>全部</option><option>生效中</option><option>已失效</option>
+                    </select>
+                    <ChevronDown size={14} className="absolute right-3 top-2 text-gray-400 pointer-events-none" />
+                  </div>
+               </div>
+            </div>
+            <div className="flex justify-end mt-6 gap-2">
+               <button onClick={() => setProfitSearch({ name: '', partner: '', status: '全部' })} className="h-8 px-4 text-[14px] bg-white border border-[#d9d9d9] text-gray-700 rounded-sm hover:text-[#1890ff] hover:border-[#1890ff] transition-all">重置</button>
+               <button className="h-8 px-4 text-[14px] bg-[#1890ff] border border-[#1890ff] text-white rounded-sm hover:bg-[#40a9ff] hover:border-[#40a9ff] transition-all">查询</button>
+            </div>
+          </div>
+          {/* ... Table ... */}
+          <div className="bg-white rounded-sm border border-[#f0f0f0]">
+            <div className="px-6 py-4 flex gap-2 border-b border-[#f0f0f0]">
+               <button className="h-8 px-4 text-[14px] bg-white border border-[#d9d9d9] text-gray-700 rounded-sm hover:text-[#1890ff] hover:border-[#1890ff] transition-all flex items-center gap-2">导出报表</button>
+               <button className="h-8 px-4 text-[14px] bg-[#1890ff] border border-[#1890ff] text-white rounded-sm hover:bg-[#40a9ff] transition-all flex items-center gap-2"><Plus size={14} /> 新增分润规则</button>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse text-[14px]">
+                <thead>
+                  <tr className="bg-[#fafafa] border-b border-[#f0f0f0] text-gray-800 font-medium">
+                    <th className="px-6 py-3 w-12"><input type="checkbox" className="rounded-sm border-[#d9d9d9] cursor-pointer" /></th>
+                    <th className="px-4 py-3">分润规则名称</th>
+                    <th className="px-4 py-3">关联服务包</th>
+                    <th className="px-4 py-3">合作渠道</th>
+                    <th className="px-4 py-3">分润模式</th>
+                    <th className="px-4 py-3">结算周期</th>
+                    <th className="px-4 py-3">状态</th>
+                    <th className="px-6 py-3 text-right">操作</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#f0f0f0]">
+                  {filteredProfits.map(profit => (
+                      <tr key={profit.id} className="hover:bg-[#fafafa] transition-colors text-gray-600">
+                        <td className="px-6 py-4"><input type="checkbox" className="rounded-sm border-[#d9d9d9] cursor-pointer" /></td>
+                        <td className="px-4 py-4">{profit.name}</td>
+                        <td className="px-4 py-4">{profit.packageName}</td>
+                        <td className="px-4 py-4">{profit.partner}</td>
+                        <td className="px-4 py-4">{profit.mode}</td>
+                        <td className="px-4 py-4">{profit.cycle}</td>
+                        <td className="px-4 py-4"><span className={`inline-block px-2 py-0.5 rounded text-xs ${profit.status === 'active' ? 'bg-green-50 border border-green-200 text-green-600' : 'bg-gray-100 border border-gray-300 text-gray-600'}`}>{profit.status === 'active' ? '生效中' : '已失效'}</span></td>
+                        <td className="px-6 py-4 text-right">
+                           <button className="text-[#1890ff] hover:text-[#40a9ff] text-[14px] cursor-pointer mr-3">查看</button>
+                           <button className="text-[#1890ff] hover:text-[#40a9ff] text-[14px] cursor-pointer">配置</button>
+                        </td>
+                      </tr>
+                    ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="px-6 py-4 flex justify-end items-center border-t border-[#f0f0f0]">
+              <div className="flex items-center gap-2 text-[14px] text-gray-600">
+                <span>共 {filteredProfits.length} 条</span>
+                <button className="h-8 min-w-[32px] px-2 rounded-sm border border-[#d9d9d9] flex items-center justify-center text-gray-400 bg-[#f5f5f5] cursor-not-allowed"><ChevronRight size={14} className="rotate-180" /></button>
+                <button className="h-8 min-w-[32px] px-2 rounded-sm border border-[#1890ff] flex items-center justify-center text-[#1890ff] bg-white cursor-pointer font-medium">1</button>
+                <button className="h-8 min-w-[32px] px-2 rounded-sm border border-[#d9d9d9] flex items-center justify-center text-gray-400 bg-[#f5f5f5] cursor-not-allowed"><ChevronRight size={14} /></button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // --- 5.1 AntD 风格模态框: 基础权益库 ---
+  const RightModal = () => {
+    if (!isRightModalOpen || !editingRight) return null;
+
+    return (
+      <div className="fixed inset-0 bg-black/45 z-50 flex items-center justify-center overflow-y-auto py-10">
+        <div className="bg-white rounded-sm w-[800px] shadow-lg flex flex-col my-auto relative">
+          
+          {/* Modal Header */}
+          <div className="px-6 py-4 border-b border-[#f0f0f0] flex justify-between items-center bg-white rounded-t-sm">
+             <h2 className="text-[16px] font-medium text-gray-800">
+               {editingRight.id ? (isRightViewOnly ? '查看基础权益' : '编辑基础权益') : '新增基础权益'}
+             </h2>
+             <button onClick={() => setIsRightModalOpen(false)} className="text-gray-400 hover:text-gray-600">
+                <X size={16} />
+             </button>
+          </div>
+
+          {/* Modal Body */}
+          <div className="p-6 bg-white overflow-y-auto max-h-[70vh] custom-scrollbar text-[14px]">
+            <div className="grid grid-cols-2 gap-x-8 gap-y-6">
+              
+              {/* Row 1 */}
+              <div className="flex flex-col">
+                <label className="text-gray-700 mb-1"><span className="text-red-500 mr-1">*</span>权益代码</label>
+                <input 
+                  disabled={isRightViewOnly || !!editingRight.id} // 编辑模式下禁止修改
+                  className={`h-8 px-3 border border-[#d9d9d9] rounded-sm outline-none transition-all ${isRightViewOnly || !!editingRight.id ? 'bg-[#f5f5f5] text-gray-500 cursor-not-allowed' : 'focus:border-[#1890ff]'}`} 
+                  placeholder="建议格式：类别-供应商-序号"
+                  value={editingRight.code} 
+                  onChange={e => setEditingRight({...editingRight, code: e.target.value})} 
+                />
+                {!editingRight.id && <span className="text-[12px] text-gray-400 mt-1">全局唯一。保存后不可修改。</span>}
+              </div>
+              <div className="flex flex-col">
+                <label className="text-gray-700 mb-1"><span className="text-red-500 mr-1">*</span>权益名称</label>
+                <input 
+                  disabled={isRightViewOnly} 
+                  className={`h-8 px-3 border border-[#d9d9d9] rounded-sm outline-none transition-all ${isRightViewOnly ? 'bg-[#f5f5f5] text-gray-500' : 'focus:border-[#1890ff]'}`} 
+                  placeholder="字符限制：2-50字"
+                  value={editingRight.name} 
+                  onChange={e => setEditingRight({...editingRight, name: e.target.value})} 
+                />
+              </div>
+
+              {/* Row 2 */}
+              <div className="flex flex-col">
+                <label className="text-gray-700 mb-1"><span className="text-red-500 mr-1">*</span>服务供应商</label>
+                <div className="relative">
+                  <select disabled={isRightViewOnly} className="w-full h-8 px-3 border border-[#d9d9d9] rounded-sm focus:border-[#1890ff] outline-none appearance-none bg-white cursor-pointer disabled:bg-[#f5f5f5] disabled:text-gray-500 disabled:cursor-not-allowed" value={editingRight.supplier} onChange={e => setEditingRight({...editingRight, supplier: e.target.value})}>
+                    {supplierOptions.map(sup => <option key={sup} value={sup}>{sup}</option>)}
+                  </select>
+                  <ChevronDown size={14} className="absolute right-3 top-2 text-gray-400 pointer-events-none" />
+                </div>
+              </div>
+              <div className="flex flex-col">
+                <label className="text-gray-700 mb-1"><span className="text-red-500 mr-1">*</span>业务类别</label>
+                <div className="relative">
+                  <select disabled={isRightViewOnly} className="w-full h-8 px-3 border border-[#d9d9d9] rounded-sm focus:border-[#1890ff] outline-none appearance-none bg-white cursor-pointer disabled:bg-[#f5f5f5] disabled:text-gray-500 disabled:cursor-not-allowed" value={editingRight.type} onChange={e => setEditingRight({...editingRight, type: e.target.value})}>
+                    <option value="服务类">服务类 (实体服务)</option>
+                    <option value="保险类">保险类 (虚拟理赔项)</option>
+                  </select>
+                  <ChevronDown size={14} className="absolute right-3 top-2 text-gray-400 pointer-events-none" />
+                </div>
+              </div>
+
+              {/* Row 3 */}
+              <div className="flex flex-col">
+                <label className="text-gray-700 mb-1"><span className="text-red-500 mr-1">*</span>定价模式</label>
+                <div className="flex items-center gap-4 h-8">
+                  <label className={`flex items-center gap-2 ${isRightViewOnly ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>
+                    <input type="radio" name="pricingMode" disabled={isRightViewOnly} checked={!editingRight.isDynamic} onChange={() => setEditingRight({...editingRight, isDynamic: false})} className="cursor-pointer" />
+                    <span>固定金额</span>
+                  </label>
+                  <label className={`flex items-center gap-2 ${isRightViewOnly ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>
+                    <input type="radio" name="pricingMode" disabled={isRightViewOnly} checked={editingRight.isDynamic} onChange={() => setEditingRight({...editingRight, isDynamic: true, amount: 0})} className="cursor-pointer" />
+                    <span>动态定价 (后置矩阵计算)</span>
+                  </label>
+                </div>
+              </div>
+              
+              <div className="flex flex-col">
+                {!editingRight.isDynamic && (
+                  <>
+                    <label className="text-gray-700 mb-1">基准采购成本</label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1.5 text-gray-500">¥</span>
+                      <input 
+                        disabled={isRightViewOnly} type="number" step="0.01" 
+                        className={`w-full h-8 pl-8 pr-3 border border-[#d9d9d9] rounded-sm outline-none transition-all ${isRightViewOnly ? 'bg-[#f5f5f5] text-gray-500 cursor-not-allowed' : 'focus:border-[#1890ff]'}`} 
+                        placeholder="0.00"
+                        value={editingRight.amount} 
+                        onChange={e => setEditingRight({...editingRight, amount: e.target.value})} 
+                      />
+                    </div>
+                  </>
+                )}
+              </div>
+
+              {/* Row 4 */}
+              <div className="flex flex-col">
+                <label className="text-gray-700 mb-1"><span className="text-red-500 mr-1">*</span>周期内频次</label>
+                <div className="relative">
+                  <input 
+                    disabled={isRightViewOnly} type="number" min="1"
+                    className={`w-full h-8 pl-3 pr-8 border border-[#d9d9d9] rounded-sm outline-none transition-all ${isRightViewOnly ? 'bg-[#f5f5f5] text-gray-500 cursor-not-allowed' : 'focus:border-[#1890ff]'}`} 
+                    placeholder="如：12"
+                    value={editingRight.frequency} 
+                    onChange={e => setEditingRight({...editingRight, frequency: parseInt(e.target.value) || ''})} 
+                  />
+                  <span className="absolute right-3 top-1.5 text-gray-500">次</span>
+                </div>
+              </div>
+              <div className="flex flex-col">
+                <label className="text-gray-700 mb-1"><span className="text-red-500 mr-1">*</span>核销验证方式</label>
+                <div className="relative">
+                  <select disabled={isRightViewOnly} className="w-full h-8 px-3 border border-[#d9d9d9] rounded-sm focus:border-[#1890ff] outline-none appearance-none bg-white cursor-pointer disabled:bg-[#f5f5f5] disabled:text-gray-500 disabled:cursor-not-allowed" value={editingRight.verification} onChange={e => setEditingRight({...editingRight, verification: e.target.value})}>
+                    <option value="扫码核销">扫码核销</option>
+                    <option value="车牌核销">车牌核销</option>
+                    <option value="报案核销">报案核销</option>
+                    <option value="APP核销">APP核销</option>
+                  </select>
+                  <ChevronDown size={14} className="absolute right-3 top-2 text-gray-400 pointer-events-none" />
+                </div>
+              </div>
+
+              {/* Row 5 */}
+              <div className="flex flex-col">
+                <label className="text-gray-700 mb-1"><span className="text-red-500 mr-1">*</span>有效期类型</label>
+                <div className="relative">
+                  <select disabled={isRightViewOnly} className="w-full h-8 px-3 border border-[#d9d9d9] rounded-sm focus:border-[#1890ff] outline-none appearance-none bg-white cursor-pointer disabled:bg-[#f5f5f5] disabled:text-gray-500 disabled:cursor-not-allowed" value={editingRight.validityType} onChange={e => setEditingRight({...editingRight, validityType: e.target.value})}>
+                    <option value="随包生效">随包生效</option>
+                    <option value="激活后固定天数">激活后固定天数</option>
+                    <option value="固定日历日期">固定日历日期</option>
+                  </select>
+                  <ChevronDown size={14} className="absolute right-3 top-2 text-gray-400 pointer-events-none" />
+                </div>
+              </div>
+              <div className="flex flex-col">
+                 {/* Empty space filler to maintain grid */}
+              </div>
+
+              {/* Row 6 */}
+              <div className="flex flex-col col-span-2">
+                <label className="text-gray-700 mb-1"><span className="text-red-500 mr-1">*</span>服务描述与规则</label>
+                <textarea 
+                  disabled={isRightViewOnly} 
+                  className={`w-full p-3 border border-[#d9d9d9] rounded-sm outline-none transition-all resize-none h-24 custom-scrollbar ${isRightViewOnly ? 'bg-[#f5f5f5] text-gray-500 cursor-not-allowed' : 'focus:border-[#1890ff]'}`} 
+                  placeholder="请详细说明服务标准、理赔承诺、使用限制等信息..."
+                  value={editingRight.desc} 
+                  onChange={e => setEditingRight({...editingRight, desc: e.target.value})} 
+                />
+              </div>
+
+            </div>
+          </div>
+
+          {/* Modal Footer */}
+          <div className="px-6 py-4 border-t border-[#f0f0f0] bg-white flex justify-end gap-2 rounded-b-sm">
+             <button onClick={() => setIsRightModalOpen(false)} className="h-8 px-4 text-[14px] bg-white border border-[#d9d9d9] text-gray-700 rounded-sm hover:text-[#1890ff] hover:border-[#1890ff] transition-all">
+               {isRightViewOnly ? '关闭' : '取消'}
+             </button>
+             {!isRightViewOnly && (
+               <>
+                 <button onClick={() => saveRight('draft')} className="h-8 px-4 text-[14px] bg-white border border-[#1890ff] text-[#1890ff] rounded-sm hover:bg-[#e6f7ff] transition-all">
+                   暂存
+                 </button>
+                 <button onClick={() => saveRight('active')} className="h-8 px-4 text-[14px] bg-[#1890ff] border border-[#1890ff] text-white rounded-sm hover:bg-[#40a9ff] transition-all">
+                   启用并保存
+                 </button>
+               </>
+             )}
+          </div>
+
+        </div>
+      </div>
+    );
+  };
+
+  // --- 5.2 AntD 风格模态框: 服务包打包 (保持原有) ---
+  const PackageModal = () => {
+    if (!isModalOpen || !editingPackage) return null;
+
+    const filteredRights = rightsLibrary.filter(r => 
+      r.name.includes(rightsSearchQuery) || 
+      r.code.includes(rightsSearchQuery) ||
+      r.supplier.includes(rightsSearchQuery) ||
+      (r.externalCode && r.externalCode.includes(rightsSearchQuery))
+    );
+
+    const removeTag = (field, itemToRemove) => {
+      if(isViewOnly) return;
+      setEditingPackage({
+        ...editingPackage,
+        [field]: editingPackage[field].filter(i => i !== itemToRemove)
+      });
+    };
+
+    const addTag = (field, e) => {
+      if(isViewOnly || !e.target.value) return;
+      const val = e.target.value;
+      if (!editingPackage[field].includes(val)) {
+        setEditingPackage({
+          ...editingPackage,
+          [field]: [...editingPackage[field], val]
+        });
+      }
+      e.target.value = ""; 
+    };
+
+    return (
+      <div className="fixed inset-0 bg-black/45 z-50 flex items-center justify-center overflow-y-auto py-10">
+        <div className="bg-white rounded-sm w-[900px] shadow-lg flex flex-col my-auto relative">
+          
+          <div className="px-6 py-4 border-b border-[#f0f0f0] flex justify-between items-center bg-white rounded-t-sm">
+             <h2 className="text-[16px] font-medium text-gray-800">
+               {editingPackage.id ? '编辑服务包' : '新增服务包'}
+             </h2>
+             <button onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-gray-600">
+                <X size={16} />
+             </button>
+          </div>
+
+          <div className="p-6 bg-white overflow-y-auto max-h-[70vh] custom-scrollbar text-[14px]">
+            {/* Section 1 */}
+            <div className="mb-6">
+              <div className="font-medium text-gray-800 mb-4 border-l-4 border-[#1890ff] pl-2">基础信息</div>
+              <div className="grid grid-cols-2 gap-x-8 gap-y-4">
+                 <div className="flex flex-col">
+                    <label className="text-gray-700 mb-1">内部代码</label>
+                    <input disabled className="h-8 px-3 border border-[#d9d9d9] rounded-sm bg-[#f5f5f5] text-gray-500 outline-none" value={editingPackage.code || '保存后系统生成'} />
+                 </div>
+                 <div className="flex flex-col">
+                    <label className="text-gray-700 mb-1">外部映射码</label>
+                    <input disabled={isViewOnly} className="h-8 px-3 border border-[#d9d9d9] rounded-sm focus:border-[#1890ff] outline-none" value={editingPackage.packageExtCode || ''} onChange={e => setEditingPackage({...editingPackage, packageExtCode: e.target.value})} placeholder="选填: 下游分发API标识" />
+                 </div>
+                 <div className="flex flex-col col-span-2">
+                    <label className="text-gray-700 mb-1"><span className="text-red-500 mr-1">*</span>服务包名称</label>
+                    <input disabled={isViewOnly} className="h-8 px-3 border border-[#d9d9d9] rounded-sm focus:border-[#1890ff] outline-none" value={editingPackage.name} onChange={e => setEditingPackage({...editingPackage, name: e.target.value})} placeholder="例如：一汽大众放心修专项包" />
+                 </div>
+              </div>
+            </div>
+
+            {/* Section 2 */}
+            <div className="mb-6">
+              <div className="font-medium text-gray-800 mb-4 border-l-4 border-[#1890ff] pl-2">风控与准入条件</div>
+              <div className="grid grid-cols-2 gap-x-8 gap-y-4">
+                 <div className="flex flex-col">
+                    <label className="text-gray-700 mb-1">车辆使用性质</label>
+                    <div className="relative">
+                      <select disabled={isViewOnly} className="w-full h-8 px-3 border border-[#d9d9d9] rounded-sm focus:border-[#1890ff] outline-none appearance-none bg-white cursor-pointer" value={editingPackage.vehicleNature} onChange={e => setEditingPackage({...editingPackage, vehicleNature: e.target.value})}>
+                        <option value="非营运">仅限非营运 (默认)</option><option value="营运">仅限营运车辆</option><option value="不限">不限</option>
+                      </select>
+                      <ChevronDown size={14} className="absolute right-3 top-2 text-gray-400 pointer-events-none" />
+                    </div>
+                 </div>
+                 <div className="flex flex-col">
+                    <label className="text-gray-700 mb-1">所有权限制</label>
+                    <div className="relative">
+                      <select disabled={isViewOnly} className="w-full h-8 px-3 border border-[#d9d9d9] rounded-sm focus:border-[#1890ff] outline-none appearance-none bg-white cursor-pointer" value={editingPackage.ownership} onChange={e => setEditingPackage({...editingPackage, ownership: e.target.value})}>
+                        <option value="不限">不限</option><option value="首任车主">仅限首任车主</option>
+                      </select>
+                      <ChevronDown size={14} className="absolute right-3 top-2 text-gray-400 pointer-events-none" />
+                    </div>
+                 </div>
+                 <div className="flex flex-col col-span-2">
+                    <label className="text-gray-700 mb-1">车龄区间配置</label>
+                    <div className="flex items-center gap-2">
+                      <div className="relative">
+                        <select disabled={isViewOnly} className="w-24 h-8 pl-2 pr-6 border border-[#d9d9d9] rounded-sm appearance-none outline-none focus:border-[#1890ff] bg-white text-gray-700" value={editingPackage.targetAge?.operator || 'between'} onChange={e => setEditingPackage({...editingPackage, targetAge: {...editingPackage.targetAge, operator: e.target.value}})}>
+                          <option value="between">介于之间</option>
+                          <option value="lessThan">小于</option>
+                          <option value="greaterThan">大于</option>
+                        </select>
+                        <ChevronDown size={12} className="absolute right-2 top-2.5 text-gray-400 pointer-events-none" />
+                      </div>
+
+                      {(editingPackage.targetAge?.operator === 'between' || editingPackage.targetAge?.operator === 'greaterThan') && (
+                        <>
+                          <div className="relative">
+                            <select disabled={isViewOnly} className="w-[100px] h-8 pl-2 pr-6 border border-[#d9d9d9] rounded-sm appearance-none outline-none focus:border-[#1890ff] bg-white text-gray-700" value={editingPackage.targetAge?.minInclusive ? 'true' : 'false'} onChange={e => setEditingPackage({...editingPackage, targetAge: {...editingPackage.targetAge, minInclusive: e.target.value === 'true'}})}>
+                              <option value="false">大于 {`>`}</option>
+                              <option value="true">大于等于 {`≥`}</option>
+                            </select>
+                            <ChevronDown size={12} className="absolute right-2 top-2.5 text-gray-400 pointer-events-none" />
+                          </div>
+                          <input disabled={isViewOnly} type="number" className="w-16 h-8 px-2 border border-[#d9d9d9] rounded-sm text-center outline-none focus:border-[#1890ff]" value={editingPackage.targetAge?.min || ''} onChange={e => setEditingPackage({...editingPackage, targetAge: {...editingPackage.targetAge, min: e.target.value}})} />
+                          <div className="relative">
+                            <select disabled={isViewOnly} className="w-16 h-8 pl-2 pr-6 border border-[#d9d9d9] rounded-sm appearance-none outline-none focus:border-[#1890ff] bg-white text-gray-700" value={editingPackage.targetAge?.minUnit || '天'} onChange={e => setEditingPackage({...editingPackage, targetAge: {...editingPackage.targetAge, minUnit: e.target.value}})}>
+                              <option value="天">天</option><option value="月">月</option><option value="年">年</option>
+                            </select>
+                            <ChevronDown size={12} className="absolute right-2 top-2.5 text-gray-400 pointer-events-none" />
+                          </div>
+                        </>
+                      )}
+
+                      {editingPackage.targetAge?.operator === 'between' && (
+                        <span className="text-gray-500 mx-2 text-xs">并且</span>
+                      )}
+
+                      {(editingPackage.targetAge?.operator === 'between' || editingPackage.targetAge?.operator === 'lessThan') && (
+                        <>
+                          <div className="relative">
+                            <select disabled={isViewOnly} className="w-[100px] h-8 pl-2 pr-6 border border-[#d9d9d9] rounded-sm appearance-none outline-none focus:border-[#1890ff] bg-white text-gray-700" value={editingPackage.targetAge?.maxInclusive ? 'true' : 'false'} onChange={e => setEditingPackage({...editingPackage, targetAge: {...editingPackage.targetAge, maxInclusive: e.target.value === 'true'}})}>
+                              <option value="false">小于 {`<`}</option>
+                              <option value="true">小于等于 {`≤`}</option>
+                            </select>
+                            <ChevronDown size={12} className="absolute right-2 top-2.5 text-gray-400 pointer-events-none" />
+                          </div>
+                          <input disabled={isViewOnly} type="number" className="w-16 h-8 px-2 border border-[#d9d9d9] rounded-sm text-center outline-none focus:border-[#1890ff]" value={editingPackage.targetAge?.max || ''} onChange={e => setEditingPackage({...editingPackage, targetAge: {...editingPackage.targetAge, max: e.target.value}})} />
+                          <div className="relative">
+                            <select disabled={isViewOnly} className="w-16 h-8 pl-2 pr-6 border border-[#d9d9d9] rounded-sm appearance-none outline-none focus:border-[#1890ff] bg-white text-gray-700" value={editingPackage.targetAge?.maxUnit || '天'} onChange={e => setEditingPackage({...editingPackage, targetAge: {...editingPackage.targetAge, maxUnit: e.target.value}})}>
+                              <option value="天">天</option><option value="月">月</option><option value="年">年</option>
+                            </select>
+                            <ChevronDown size={12} className="absolute right-2 top-2.5 text-gray-400 pointer-events-none" />
+                          </div>
+                        </>
+                      )}
+                    </div>
+                 </div>
+                 <div className="flex flex-col col-span-2">
+                    <label className="text-gray-700 mb-1">准入车型</label>
+                    <div className="relative w-full max-w-[50%]">
+                      <select disabled={isViewOnly} className="w-full h-8 px-3 border border-[#d9d9d9] rounded-sm focus:border-[#1890ff] outline-none appearance-none bg-white" onChange={(e) => addTag('allowedModels', e)}>
+                        <option value="">+ 选择添加车型...</option>
+                        {modelOptions.map(model => <option key={model} value={model}>{model}</option>)}
+                      </select>
+                      <ChevronDown size={14} className="absolute right-3 top-2 text-gray-400 pointer-events-none" />
+                    </div>
+                    {editingPackage.allowedModels.length > 0 && (
+                      <div className="flex flex-wrap gap-2 mt-2">
+                        {editingPackage.allowedModels.map(model => (
+                          <div key={model} className="bg-[#f5f5f5] border border-[#d9d9d9] text-gray-700 px-2 py-0.5 rounded-sm text-xs flex items-center gap-1">
+                            {model} {!isViewOnly && <X size={12} className="cursor-pointer hover:text-red-500" onClick={() => removeTag('allowedModels', model)}/>}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                 </div>
+              </div>
+            </div>
+
+            {/* Section 3 */}
+            <div className="mb-6">
+              <div className="font-medium text-gray-800 mb-4 border-l-4 border-[#1890ff] pl-2">包含基础权益</div>
+              <div className="border border-[#d9d9d9] rounded-sm">
+                 <div className="p-3 border-b border-[#d9d9d9] bg-[#fafafa]">
+                    <div className="relative w-64">
+                      <Search size={14} className="absolute left-2.5 top-1.5 text-gray-400" />
+                      <input type="text" placeholder="搜索权益..." className="w-full h-7 pl-8 pr-3 text-xs border border-[#d9d9d9] rounded-sm focus:border-[#1890ff] outline-none" value={rightsSearchQuery} onChange={e => setRightsSearchQuery(e.target.value)} />
+                    </div>
+                 </div>
+                 <div className="max-h-48 overflow-y-auto">
+                    <table className="w-full text-left">
+                       <thead className="bg-[#fafafa] text-gray-600 text-xs border-b border-[#f0f0f0]">
+                         <tr>
+                           <th className="px-4 py-2 font-normal w-10">选择</th>
+                           <th className="px-4 py-2 font-normal">权益名称</th>
+                           <th className="px-4 py-2 font-normal">供应商</th>
+                           <th className="px-4 py-2 font-normal text-right">基准成本</th>
+                         </tr>
+                       </thead>
+                       <tbody className="divide-y divide-[#f0f0f0] text-xs text-gray-700">
+                         {filteredRights.map(right => (
+                           <tr key={right.id} className="hover:bg-[#f5f5f5] cursor-pointer" onClick={() => {
+                             if(isViewOnly) return;
+                             const ids = editingPackage.includedRights.includes(right.id) ? editingPackage.includedRights.filter(i => i !== right.id) : [...editingPackage.includedRights, right.id];
+                             setEditingPackage({...editingPackage, includedRights: ids});
+                           }}>
+                             <td className="px-4 py-2">
+                               <input type="checkbox" checked={editingPackage.includedRights.includes(right.id)} readOnly className="rounded-sm border-[#d9d9d9] cursor-pointer" />
+                             </td>
+                             <td className="px-4 py-2">{right.name}</td>
+                             <td className="px-4 py-2">{right.supplier}</td>
+                             <td className="px-4 py-2 text-right">{right.isDynamic ? '动态' : `¥${right.amount}`}</td>
+                           </tr>
+                         ))}
+                       </tbody>
+                    </table>
+                 </div>
+              </div>
+            </div>
+
+            {/* Section 4 */}
+            <div>
+              <div className="font-medium text-gray-800 mb-4 border-l-4 border-[#1890ff] pl-2 flex justify-between items-center">
+                 <span>价格矩阵</span>
+                 {!isViewOnly && (
+                  <div className="flex gap-4">
+                    <button 
+                      onClick={() => {
+                        if (isViewOnly) return;
+                        const mockImportedData = [
+                          { id: Date.now() + 1, region: '西南大区', vehicleLevel: 'C级车', packageCost: 320, baseCost: 420, suggestedPrice: 799 },
+                          { id: Date.now() + 2, region: '华中大区', vehicleLevel: 'B级车', packageCost: 280, baseCost: 380, suggestedPrice: 699 }
+                        ];
+                        setEditingPackage({
+                          ...editingPackage, 
+                          costMatrix: [...editingPackage.costMatrix, ...mockImportedData]
+                        });
+                        alert('批量导入成功！已追加 2 条矩阵数据。');
+                      }} 
+                      className="text-[#1890ff] text-xs font-normal flex items-center gap-1 hover:text-[#40a9ff]"
+                    >
+                      <UploadCloud size={12} /> 批量导入
+                    </button>
+                    <button onClick={() => setEditingPackage({...editingPackage, costMatrix: [...editingPackage.costMatrix, { id: Date.now(), region: '全国', vehicleLevel: '通用', packageCost: 0, baseCost: 0, suggestedPrice: 0 }]})} className="text-[#1890ff] text-xs font-normal flex items-center gap-1 hover:text-[#40a9ff]">
+                      <Plus size={12} /> 新增行
+                    </button>
+                  </div>
+                 )}
+              </div>
+              <div className="border border-[#d9d9d9] rounded-sm overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-[#fafafa] text-gray-600 border-b border-[#d9d9d9]">
+                    <tr>
+                      <th className="px-3 py-2 font-normal">地区</th>
+                      <th className="px-3 py-2 font-normal">车系等级</th>
+                      <th className="px-3 py-2 font-normal">服务包成本(¥)</th>
+                      <th className="px-3 py-2 font-normal">底价(¥)</th>
+                      <th className="px-3 py-2 font-normal">指导价(¥)</th>
+                      {!isViewOnly && <th className="px-2 py-2 w-8"></th>}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#f0f0f0] text-gray-700">
+                    {editingPackage.costMatrix.map((m, idx) => (
+                      <tr key={m.id}>
+                        <td className="p-2"><input disabled={isViewOnly} className="w-full h-7 px-2 border border-[#d9d9d9] rounded-sm focus:border-[#1890ff] outline-none" value={m.region} onChange={e => { const nm = [...editingPackage.costMatrix]; nm[idx].region = e.target.value; setEditingPackage({...editingPackage, costMatrix: nm}); }} /></td>
+                        <td className="p-2"><input disabled={isViewOnly} className="w-full h-7 px-2 border border-[#d9d9d9] rounded-sm focus:border-[#1890ff] outline-none" value={m.vehicleLevel} onChange={e => { const nm = [...editingPackage.costMatrix]; nm[idx].vehicleLevel = e.target.value; setEditingPackage({...editingPackage, costMatrix: nm}); }} /></td>
+                        <td className="p-2"><input disabled={isViewOnly} type="number" className="w-full h-7 px-2 border border-[#d9d9d9] rounded-sm focus:border-[#1890ff] outline-none" value={m.packageCost} onChange={e => { const nm = [...editingPackage.costMatrix]; nm[idx].packageCost = parseFloat(e.target.value)||0; setEditingPackage({...editingPackage, costMatrix: nm}); }} /></td>
+                        <td className="p-2"><input disabled={isViewOnly} type="number" className="w-full h-7 px-2 border border-[#d9d9d9] rounded-sm focus:border-[#1890ff] outline-none" value={m.baseCost} onChange={e => { const nm = [...editingPackage.costMatrix]; nm[idx].baseCost = parseFloat(e.target.value)||0; setEditingPackage({...editingPackage, costMatrix: nm}); }} /></td>
+                        <td className="p-2"><input disabled={isViewOnly} type="number" className="w-full h-7 px-2 border border-[#d9d9d9] rounded-sm focus:border-[#1890ff] outline-none" value={m.suggestedPrice} onChange={e => { const nm = [...editingPackage.costMatrix]; nm[idx].suggestedPrice = parseFloat(e.target.value)||0; setEditingPackage({...editingPackage, costMatrix: nm}); }} /></td>
+                        {!isViewOnly && (
+                          <td className="p-2 text-center">
+                            <button onClick={() => { const nm = editingPackage.costMatrix.filter(item => item.id !== m.id); setEditingPackage({...editingPackage, costMatrix: nm}); }} className="text-gray-400 hover:text-red-500"><Trash2 size={14} /></button>
+                          </td>
+                        )}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+          </div>
+
+          <div className="px-6 py-4 border-t border-[#f0f0f0] bg-white flex justify-end gap-2 rounded-b-sm">
+             <button onClick={() => setIsModalOpen(false)} className="h-8 px-4 text-[14px] bg-white border border-[#d9d9d9] text-gray-700 rounded-sm hover:text-[#1890ff] hover:border-[#1890ff] transition-all">
+               取消
+             </button>
+             {!isViewOnly && (
+               <>
+                 <button onClick={() => savePackage('draft')} className="h-8 px-4 text-[14px] bg-white border border-[#1890ff] text-[#1890ff] rounded-sm hover:bg-[#e6f7ff] transition-all">
+                   暂存
+                 </button>
+                 <button onClick={() => savePackage('online')} className="h-8 px-4 text-[14px] bg-[#1890ff] border border-[#1890ff] text-white rounded-sm hover:bg-[#40a9ff] transition-all">
+                   上架
+                 </button>
+               </>
+             )}
+          </div>
+
+        </div>
+      </div>
+    );
+  };
+
+  // --- 6. 主布局渲染 ---
+  return (
+    <div className="flex h-screen bg-[#f0f2f5] font-sans text-gray-800">
+      <aside className="w-[200px] sm:w-[256px] bg-[#001529] h-full flex flex-col flex-shrink-0 z-20 shadow-lg">
+        <div className="h-[48px] flex items-center px-4 gap-2 text-white text-[18px] font-semibold tracking-wide bg-[#002140]">
+          <div className="w-6 h-6 rounded bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center">
+            <Car size={16} className="text-white" />
+          </div>
+          智行保
+        </div>
+        <SidebarMenu />
+      </aside>
+
+      <main className="flex-1 flex flex-col min-w-0 h-full overflow-hidden">
+        <TopHeader />
+        
+        {activeTab === 'packages' ? <ServicePackageBuilder /> : 
+         activeTab === 'rights' ? <RightsManager /> :
+         activeTab === 'profit' ? <ProfitManager /> : (
+          <div className="flex-1 flex flex-col items-center justify-center bg-[#f0f2f5]">
+            <div className="text-gray-400 mb-4"><Car size={48} /></div>
+            <p className="text-gray-500 text-[14px]">模块建设中，请访问其他页面</p>
+          </div>
+        )}
+      </main>
+
+      <PackageModal />
+      <RightModal />
+
+      <style>{`
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #d9d9d9; border-radius: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #bfbfbf; }
+        
+        input:focus, select:focus, textarea:focus {
+          outline: none;
+        }
+      `}</style>
+    </div>
+  );
+};
+
+export default App;
