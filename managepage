@@ -1,0 +1,450 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { 
+  Layout, Menu, Breadcrumb, Card, Form, Input, Select, 
+  Button, Tabs, Table, Tag, Space, InputNumber, Row, Col, 
+  Tooltip, Divider, Radio, Typography, message, Popconfirm, Modal, Badge as AntBadge,
+  Alert
+} from 'antd';
+import { 
+  LayoutDashboard, 
+  ShieldCheck, 
+  Package, 
+  Wallet, 
+  History, 
+  Plus, 
+  Trash2, 
+  Save, 
+  Search, 
+  ArrowRight,
+  TrendingUp,
+  Users,
+  AlertTriangle,
+  ChevronRight,
+  Settings,
+  Server,
+  UserCheck,
+  Clock,
+  Repeat,
+  Info,
+  ExternalLink,
+  Calendar,
+  FileText
+} from 'lucide-react';
+import * as echarts from 'echarts';
+
+const { Header, Content, Sider } = Layout;
+const { Option } = Select;
+const { TextArea } = Input;
+const { Text } = Typography;
+
+const App = () => {
+  const [currentMenu, setCurrentMenu] = useState('dashboard');
+  const chartRef = useRef(null);
+  const [activeConfigTab, setActiveConfigTab] = useState('1');
+  const [rightsForm] = Form.useForm();
+
+  // --- 模拟动态数据状态 ---
+  const [rightsData, setRightsData] = useState([
+    { key: '1', name: '标准洗车服务', code: 'XC001', provider: '途虎养车', cost: 25, status: 'active', category: '清洗美容', subCategory: '标准洗车', hasOrders: true, settleType: 'api', extCode: 'TH_WASH_STD' },
+    { key: '2', name: '50KM道路救援', code: 'JY001', provider: '盛大汽车', cost: 120, status: 'active', category: '紧急救援', subCategory: '拖车服务', hasOrders: false, settleType: 'api', extCode: 'SD_RESCUE_50' },
+    { key: '3', name: '理赔代步车(3天)', code: 'DB005', provider: '神州租车', cost: 380, status: 'inactive', category: '保险延保', subCategory: '理赔代步车', hasOrders: true, settleType: 'manual', extCode: 'SZ_RENT_3D' },
+  ]);
+
+  // 初始化图表
+  useEffect(() => {
+    if (currentMenu === 'dashboard' && chartRef.current) {
+      const myChart = echarts.init(chartRef.current);
+      const option = {
+        tooltip: { trigger: 'axis' },
+        grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
+        xAxis: { type: 'category', boundaryGap: false, data: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] },
+        yAxis: { type: 'value' },
+        series: [{
+          name: '权益发放量',
+          type: 'line',
+          smooth: true,
+          data: [820, 932, 901, 934, 1290, 1330, 1320],
+          itemStyle: { color: '#3b82f6' },
+          areaStyle: { color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [{ offset: 0, color: 'rgba(59, 130, 246, 0.3)' }, { offset: 1, color: 'rgba(59, 130, 246, 0)' }]) }
+        }]
+      };
+      myChart.setOption(option);
+      return () => myChart.dispose();
+    }
+  }, [currentMenu]);
+
+  // --- 基础权益库列表页操作逻辑 ---
+  const handleToggleStatus = (key, currentStatus) => {
+    const newStatus = currentStatus === 'active' ? 'inactive' : 'active';
+    setRightsData(prev => prev.map(item => item.key === key ? { ...item, status: newStatus } : item));
+    message.success(`该权益已成功${newStatus === 'active' ? '启用' : '停用'}`);
+  };
+
+  const handleDeleteRight = (record) => {
+    if (record.hasOrders) {
+      Modal.error({
+        title: '物理删除受限',
+        content: '该权益目前关联了已有业务订单（hasOrders: true），为了保证财务审计追溯，系统禁止物理删除。请执行“停用”操作使其在前端配置中失效。',
+        okText: '知道了'
+      });
+      return;
+    }
+    setRightsData(prev => prev.filter(item => item.key !== record.key));
+    message.success('权益已从权益库中移除');
+  };
+
+  // --- 模块视图渲染 ---
+
+  // 1. 基础权益库列表 (Refined)
+  const renderRightsLibrary = () => (
+    <div className="space-y-6 animate-in fade-in duration-500">
+      <div className="flex justify-between items-end">
+        <div>
+          <h2 className="text-2xl font-bold text-gray-800 tracking-tight">基础权益库 (Rights Inventory)</h2>
+          <p className="text-gray-400 text-sm mt-1">集中维护原子服务项、采购成本、供应商及对接外部系统的SKU编码</p>
+        </div>
+        <Button 
+          type="primary" 
+          icon={<Plus size={16} />} 
+          className="bg-blue-600 h-10 px-6 shadow-md shadow-blue-100 rounded-lg flex items-center"
+          onClick={() => setCurrentMenu('rights_add')}
+        >
+          新增原子权益
+        </Button>
+      </div>
+
+      <Card className="rounded-xl border-none shadow-sm overflow-hidden">
+        <div className="flex gap-4 mb-6">
+          <Input prefix={<Search size={16} className="text-gray-400" />} placeholder="搜索权益名或编码" className="w-64" />
+          <Select placeholder="服务大类" className="w-48" allowClear>
+            <Option value="维保服务">维保服务</Option>
+            <Option value="清洗美容">清洗美容</Option>
+            <Option value="紧急救援">紧急救援</Option>
+            <Option value="车主便利">车主便利</Option>
+          </Select>
+          <Button>筛选</Button>
+        </div>
+
+        <Table 
+          dataSource={rightsData}
+          className="ant-table-custom"
+          columns={[
+            { title: '代码', dataIndex: 'code', key: 'code', render: text => <code className="text-blue-600 bg-blue-50 px-2 py-0.5 rounded font-mono text-xs">{text}</code> },
+            { title: '权益名称', dataIndex: 'name', key: 'name', render: text => <span className="font-semibold text-gray-700">{text}</span> },
+            { title: '外部SKU', dataIndex: 'extCode', key: 'extCode', render: text => <span className="text-gray-400 italic text-xs font-mono">{text || '-'}</span> },
+            { title: '供应商', dataIndex: 'provider', key: 'provider' },
+            { title: '成本', dataIndex: 'cost', key: 'cost', render: val => <span className="font-mono text-gray-900 font-bold">¥{val.toFixed(2)}</span> },
+            { title: '状态', dataIndex: 'status', key: 'status', render: s => <AntBadge status={s === 'active' ? 'success' : 'default'} text={s === 'active' ? '已启用' : '已停用'} /> },
+            { title: '操作', key: 'op', width: 220, render: (_, record) => (
+              <Space size="middle">
+                <Button type="link" size="small" className="px-0" onClick={() => setCurrentMenu('rights_add')}>详情编辑</Button>
+                <Button 
+                  type="link" 
+                  size="small" 
+                  className={`px-0 ${record.status === 'active' ? 'text-orange-500' : 'text-green-500'}`}
+                  onClick={() => handleToggleStatus(record.key, record.status)}
+                >
+                  {record.status === 'active' ? '停用' : '启用'}
+                </Button>
+                <Popconfirm title="确定物理删除吗？(仅限无历史数据的权益)" onConfirm={() => handleDeleteRight(record)}>
+                  <Button type="link" size="small" danger className="px-0">删除</Button>
+                </Popconfirm>
+              </Space>
+            )}
+          ]}
+        />
+      </Card>
+    </div>
+  );
+
+  // 2. 新增原子权益详情页 (Full Implementation)
+  const renderRightsAdd = () => (
+    <div className="max-w-5xl mx-auto space-y-6 animate-in slide-in-from-right duration-300 pb-20">
+      <div className="flex items-center gap-4 mb-2">
+        <Button icon={<ArrowRight size={14} className="rotate-180" />} onClick={() => setCurrentMenu('rights')}>返回权益库</Button>
+        <h2 className="text-xl font-bold text-gray-800">权益详情配置</h2>
+      </div>
+
+      <Form layout="vertical" form={rightsForm} initialValues={{ status: 'active', settleType: 'api', frequencyType: 'fixed', validityType: 'relative', gateway: 'standard' }}>
+        {/* 第一部分：基础信息 */}
+        <Card title={<span><FileText size={16} className="inline mr-2 text-blue-500 mb-1" />基础定义</span>} className="rounded-xl border-none shadow-sm mb-6">
+          <Row gutter={24}>
+            <Col span={12}>
+              <Form.Item label="权益正式名称" name="name" required rules={[{ required: true, message: '请输入权益展示名称' }]}>
+                <Input size="large" placeholder="如：精细洗车服务(五座轿车)" />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item label="智行保系统编码 (Internal Code)" name="code" required tooltip="系统内全局唯一，一旦确定不建议修改">
+                <Input size="large" placeholder="例：WASH_LUX_01" className="font-mono" />
+              </Form.Item>
+            </Col>
+          </Row>
+          <Row gutter={24}>
+            <Col span={8}>
+              <Form.Item label="服务大类" name="category" required>
+                <Select size="large" placeholder="请选择">
+                  <Option value="维保服务">维保服务</Option>
+                  <Option value="清洗美容">清洗美容</Option>
+                  <Option value="紧急救援">紧急救援</Option>
+                  <Option value="车主便利">车主便利</Option>
+                  <Option value="保险延保">保险延保</Option>
+                </Select>
+              </Form.Item>
+            </Col>
+            <Col span={8}>
+              <Form.Item label="服务子类" name="subCategory">
+                <Select size="large" placeholder="请选择子类">
+                  <Option value="基础保养">基础保养</Option>
+                  <Option value="标准洗车">标准洗车</Option>
+                  <Option value="拖车服务">拖车服务</Option>
+                  <Option value="代金券">代金券</Option>
+                </Select>
+              </Form.Item>
+            </Col>
+            <Col span={8}>
+              <Form.Item label="基准采购成本 (元)" name="cost" required>
+                <InputNumber size="large" className="w-full" precision={2} prefix="¥" />
+              </Form.Item>
+            </Col>
+          </Row>
+        </Card>
+
+        {/* 第二部分：有效期与频次逻辑 */}
+        <Card title={<span><Clock size={16} className="inline mr-2 text-blue-500 mb-1" />履约规则配置</span>} className="rounded-xl border-none shadow-sm mb-6">
+          <Row gutter={24}>
+            <Col span={12}>
+              <Form.Item label="享权频次限制" name="frequencyType">
+                <Radio.Group buttonStyle="solid">
+                  <Radio.Button value="fixed">固定次数</Radio.Button>
+                  <Radio.Button value="unlimited">不限次数</Radio.Button>
+                  <Radio.Button value="cycle">按周期限制</Radio.Button>
+                </Radio.Group>
+              </Form.Item>
+              <Form.Item noStyle shouldUpdate={(prev, curr) => prev.frequencyType !== curr.frequencyType}>
+                {({ getFieldValue }) => getFieldValue('frequencyType') === 'fixed' && (
+                  <div className="mt-4 flex items-center gap-2 p-3 bg-gray-50 rounded">
+                    <span>总计可核销次数：</span>
+                    <InputNumber min={1} defaultValue={1} />
+                    <span className="text-gray-400 ml-2">次</span>
+                  </div>
+                )}
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item label="权益有效期模式" name="validityType">
+                <Radio.Group buttonStyle="solid">
+                  <Radio.Button value="relative">相对日期</Radio.Button>
+                  <Radio.Button value="absolute">固定区间</Radio.Button>
+                  <Radio.Button value="permanent">永久有效</Radio.Button>
+                </Radio.Group>
+              </Form.Item>
+              <Form.Item noStyle shouldUpdate={(prev, curr) => prev.validityType !== curr.validityType}>
+                {({ getFieldValue }) => getFieldValue('validityType') === 'relative' && (
+                  <div className="mt-4 flex items-center gap-2 p-3 bg-gray-50 rounded">
+                    <span>发放后第：</span>
+                    <InputNumber min={1} defaultValue={365} />
+                    <Select defaultValue="day" style={{ width: 80 }}>
+                      <Option value="day">天</Option>
+                      <Option value="month">月</Option>
+                    </Select>
+                    <span>内有效</span>
+                  </div>
+                )}
+              </Form.Item>
+            </Col>
+          </Row>
+        </Card>
+
+        {/* 第三部分：对接与供应商配置 (API Config Included) */}
+        <Card title={<span><Server size={16} className="inline mr-2 text-blue-500 mb-1" />对接与结算配置</span>} className="rounded-xl border-none shadow-sm mb-6">
+          <Row gutter={24}>
+            <Col span={12}>
+              <Form.Item label="所属供应商" name="provider" required rules={[{ required: true }]}>
+                <Select size="large" placeholder="请选择合约供应商">
+                  <Option value="th">途虎养车 (Tuhu)</Option>
+                  <Option value="sh">盛大汽车 (Shengda)</Option>
+                  <Option value="sz">神州租车 (China Auto Rental)</Option>
+                  <Option value="self">智行保自营/线下服务</Option>
+                </Select>
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item label="对接模式" name="settleType">
+                <Select size="large">
+                  <Option value="api">API 接口自动化 (推荐)</Option>
+                  <Option value="manual">人工线下核销 (券码模式)</Option>
+                  <Option value="offline">线下实物履约</Option>
+                </Select>
+              </Form.Item>
+            </Col>
+          </Row>
+
+          {/* 动态 API 配置区块 */}
+          <Form.Item noStyle shouldUpdate={(prev, curr) => prev.settleType !== curr.settleType}>
+            {({ getFieldValue }) => getFieldValue('settleType') === 'api' && (
+              <div className="bg-blue-50 p-6 rounded-xl border border-blue-100 mt-4 space-y-4">
+                <div className="flex items-center gap-2 text-blue-700 font-bold mb-2">
+                  <ExternalLink size={16} /> 供应商 API 对接参数配置
+                </div>
+                <Row gutter={24}>
+                  <Col span={12}>
+                    <Form.Item label="外部权益编码 (External SKU Code)" name="extCode" required tooltip="供应商侧定义的该权益唯一 ID，接口划扣必传参数">
+                      <Input placeholder="例：WASH_001_A" className="bg-white border-blue-200" />
+                    </Form.Item>
+                  </Col>
+                  <Col span={12}>
+                    <Form.Item label="对接网关/协议" name="gateway">
+                      <Select defaultValue="standard" className="bg-white border-blue-200">
+                        <Option value="standard">智行保标准对接网关 V6</Option>
+                        <Option value="custom">私有化定制 API 插件</Option>
+                      </Select>
+                    </Form.Item>
+                  </Col>
+                </Row>
+                <div className="text-xs text-blue-500 bg-white p-3 rounded border border-blue-50 flex gap-2">
+                  <Info size={14} className="flex-shrink-0 mt-0.5" />
+                  <div>
+                    注意：配置 API 模式后，系统将在订单生效时自动触发供应商接口进行“权益预占”或“码券下发”。请务必核对外部 SKU 编码与供应商合同一致。
+                  </div>
+                </div>
+              </div>
+            )}
+          </Form.Item>
+        </Card>
+
+        {/* 第四部分：文本说明 */}
+        <Card title="服务说明" className="rounded-xl border-none shadow-sm mb-6">
+           <Form.Item label="服务细则描述" name="desc">
+             <TextArea rows={4} placeholder="请输入具体的权益使用限制、范围、违约条款等（此内容可能展示给C端用户）" className="rounded-lg" />
+           </Form.Item>
+        </Card>
+
+        <div className="flex justify-end gap-4">
+          <Button size="large" className="px-10 rounded-lg" onClick={() => setCurrentMenu('rights')}>取消配置</Button>
+          <Button 
+            type="primary" 
+            size="large" 
+            className="px-12 bg-blue-600 rounded-lg shadow-lg shadow-blue-200"
+            icon={<Save size={18} />}
+            onClick={() => {
+              message.success('新原子权益已保存并发布至权益库');
+              setCurrentMenu('rights');
+            }}
+          >
+            保存并发布
+          </Button>
+        </div>
+      </Form>
+    </div>
+  );
+
+  // --- 重用之前的渲染组件 (控制台等) ---
+  const renderDashboard = () => (
+    <div className="space-y-6 animate-in fade-in duration-500">
+      <div className="grid grid-cols-4 gap-6">
+        {[
+          { label: '累计服务订单', value: '12,840', change: '+12%', color: 'text-blue-600', icon: <TrendingUp size={20} /> },
+          { label: '生效中服务包', value: '48', change: '正常', color: 'text-green-600', icon: <Package size={20} /> },
+          { label: '关联渠道商', value: '156', change: '+5', color: 'text-purple-600', icon: <Users size={20} /> },
+          { label: '待处理异常', value: '3', change: '-2', color: 'text-red-600', icon: <AlertTriangle size={20} /> },
+        ].map((stat, idx) => (
+          <Card key={idx} className="rounded-xl shadow-sm border-none">
+            <div className="flex justify-between items-start">
+              <div className="text-sm text-gray-500 mb-2">{stat.label}</div>
+              <div className={`p-2 rounded-lg bg-gray-50 ${stat.color}`}>{stat.icon}</div>
+            </div>
+            <div className={`text-3xl font-bold ${stat.color}`}>{stat.value}</div>
+            <div className="text-xs mt-2 text-gray-400">环比昨日: <span className="text-green-500">{stat.change}</span></div>
+          </Card>
+        ))}
+      </div>
+      <Card title="权益核销热度趋势 (最近7天)" className="rounded-xl shadow-sm border-none h-[420px]">
+        <div ref={chartRef} style={{ width: '100%', height: '350px' }}></div>
+      </Card>
+    </div>
+  );
+
+  const renderSider = () => (
+    <div className="w-64 bg-[#001529] min-h-screen text-white flex flex-col fixed left-0 top-0 z-50">
+      <div className="p-6 flex items-center gap-3 border-b border-gray-800 h-16">
+        <div className="w-8 h-8 bg-blue-600 rounded flex items-center justify-center shadow-lg shadow-blue-500/20">
+          <ShieldCheck size={20} className="text-white" />
+        </div>
+        <span className="text-lg font-bold tracking-tighter">智行保运营中台</span>
+      </div>
+      <nav className="flex-1 py-4">
+        {[
+          { key: 'dashboard', label: '工作看板', icon: <LayoutDashboard size={18} /> },
+          { key: 'rights', label: '基础权益库', icon: <Wallet size={18} /> },
+          { key: 'packages', label: '服务包配置', icon: <Package size={18} /> },
+          { key: 'projects', label: '项目与分润', icon: <Users size={18} /> },
+          { key: 'logs', label: '系统日志', icon: <History size={18} /> },
+        ].map(item => (
+          <div 
+            key={item.key}
+            onClick={() => setCurrentMenu(item.key)}
+            className={`flex items-center gap-3 px-6 py-4 cursor-pointer transition-all ${currentMenu.includes(item.key.split('_')[0]) ? 'bg-blue-600 text-white shadow-inner' : 'text-gray-400 hover:text-white hover:bg-gray-800'}`}
+          >
+            {item.icon}
+            <span>{item.label}</span>
+            {currentMenu.includes(item.key.split('_')[0]) && <ChevronRight size={14} className="ml-auto" />}
+          </div>
+        ))}
+      </nav>
+      <div className="p-4 border-t border-gray-800 text-xs text-gray-500 text-center font-mono">
+        Zhixingbao V6.4
+      </div>
+    </div>
+  );
+
+  return (
+    <Layout className="min-h-screen">
+      {renderSider()}
+      <Layout style={{ marginLeft: 256 }}>
+        <Header className="bg-white px-8 h-16 border-b border-gray-100 flex items-center justify-between sticky top-0 z-40 shadow-sm">
+          <Breadcrumb items={[{ title: '智行保管理中台' }, { title: '权益中心' }]} />
+          <div className="flex items-center gap-6">
+             <Space size="large" className="text-gray-400">
+               <Tooltip title="通知"><AntBadge dot><TrendingUp size={18} /></AntBadge></Tooltip>
+               <Tooltip title="设置"><Settings size={18} /></Tooltip>
+             </Space>
+             <Divider type="vertical" />
+             <div className="flex items-center gap-3">
+               <div className="text-right">
+                  <div className="text-sm font-bold text-gray-800">产品专家</div>
+                  <div className="text-[10px] text-green-500 flex items-center justify-end gap-1"><div className="w-1 h-1 rounded-full bg-green-500 animate-pulse"></div> Online</div>
+               </div>
+               <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center text-blue-600 border border-blue-200 shadow-sm"><Users size={20} /></div>
+             </div>
+          </div>
+        </Header>
+
+        <Content className="p-8 bg-[#f8fafc]">
+          {currentMenu === 'dashboard' && renderDashboard()}
+          {currentMenu === 'rights' && renderRightsLibrary()}
+          {currentMenu === 'rights_add' && renderRightsAdd()}
+          {['packages', 'projects', 'logs'].includes(currentMenu) && <div className="h-[400px] flex items-center justify-center text-gray-400">此模块正在适配 V6.4 版本中...</div>}
+        </Content>
+      </Layout>
+
+      <style>{`
+        body { background-color: #f8fafc; font-family: 'Inter', -apple-system, sans-serif; }
+        .ant-card { border-radius: 12px !important; border: 1px solid #f0f0f0 !important; }
+        .ant-table-wrapper { background: #fff; border-radius: 12px; }
+        .ant-table-thead > tr > th { background: #f9fafb !important; color: #6b7280 !important; font-weight: 600 !important; padding: 16px !important; }
+        .ant-input-number, .ant-input, .ant-select-selector, .ant-radio-button-wrapper { border-radius: 8px !important; }
+        .ant-btn { border-radius: 8px !important; font-weight: 500; }
+        .ant-table-cell { padding: 16px !important; }
+        
+        .animate-in { animation: slideIn 0.3s ease-out; }
+        @keyframes slideIn {
+          from { opacity: 0; transform: translateY(10px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+      `}</style>
+    </Layout>
+  );
+};
+
+export default App;
